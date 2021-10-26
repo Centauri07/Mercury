@@ -27,25 +27,38 @@ public class AnnouncementListener extends ListenerAdapter {
     public void onPrivateMessageReceived(@NotNull PrivateMessageReceivedEvent event) {
         if (event.getAuthor().isBot()) return;
 
-        // TODO : add refactoring
-
         AnnouncementSession announcementSession = AnnouncementSession.getCache(event.getAuthor().getId());
+
         if (announcementSession != null) {
-            if (event.getMessage().getContentRaw().equals("$cancel")) {
-                announcementSession.stopTimer();
-
-                AnnouncementSession.removeCache(event.getAuthor().getId());
-
-                event.getAuthor().openPrivateChannel().queue(
-                        privateChannel -> privateChannel.sendMessageEmbeds(new EmbedBuilder().setColor(Color.GREEN)
-                                .setDescription("Successfully canceled").build()).queue()
-                );
-                return;
-            }
-
             announcementSession.resetTimer();
 
-            if (announcementSession.getTitle() == null) {
+            if (announcementSession.getColor() == null) {
+                Color color = me.centauri07.mercury.util.Color.getColor(event.getMessage().getContentRaw());
+
+                if (color == null) {
+                    event.getAuthor().openPrivateChannel().queue(
+                            privateChannel -> {
+                                privateChannel.sendMessageEmbeds(
+                                        new EmbedBuilder().setDescription("Color does not exist").setColor(Color.RED)
+                                                .build()).queue();
+                            }
+                    );
+                }
+
+                announcementSession.setColor(color);
+
+                event.getAuthor().openPrivateChannel().queue(
+                        privateChannel -> {
+                            privateChannel.sendMessageEmbeds(announcementSession.getEmbedBuilder().build()).queue();
+                            privateChannel.sendMessageEmbeds(
+                                    new EmbedBuilder()
+                                            .setDescription("Enter Announcement Title")
+                                            .setColor(Color.CYAN).build()
+                            ).queue();
+                        }
+                );
+
+            } else if (announcementSession.getTitle() == null) {
                 announcementSession.setTitle(event.getMessage().getContentRaw());
                 event.getAuthor().openPrivateChannel().queue(
                         privateChannel -> {
@@ -59,15 +72,16 @@ public class AnnouncementListener extends ListenerAdapter {
                 );
 
             } else if (announcementSession.isDescription()) {
+                System.out.println("desc");
                 if (announcementSession.getDescription() == null) {
+                    announcementSession.setIsDescription(false);
                     announcementSession.setDescription(event.getMessage().getContentRaw());
                     event.getAuthor().openPrivateChannel().queue(
                             privateChannel -> {
                                 privateChannel.sendMessageEmbeds(announcementSession.getEmbedBuilder().build()).queue();
 
                                 if (announcementSession.isField()) {
-                                    AnnouncementSession.addFieldCache(event.getAuthor().getId());
-
+                                    System.out.println("yes");
                                     privateChannel.sendMessageEmbeds(new EmbedBuilder().setColor(Color.CYAN)
                                             .setDescription("Enter Field Title").build()).queue();
                                 } else {
@@ -80,16 +94,17 @@ public class AnnouncementListener extends ListenerAdapter {
 
                 }
             } else if (announcementSession.isField()) {
+                System.out.println("field");
                 Field field = AnnouncementSession.getFieldCache(event.getAuthor().getId());
                 if (field != null) {
                     if (!field.hasTitle()) {
                         field.setTitle(event.getMessage().getContentRaw());
-
                         event.getAuthor().openPrivateChannel().queue(
                                 privateChannel -> privateChannel.sendMessageEmbeds(new EmbedBuilder().setColor(Color.CYAN)
                                         .setDescription("Enter Field Description").build()).queue()
                         );
                     } else if (!field.hasDescription()) {
+                        announcementSession.setIsDescription(false);
                         field.setDescription(event.getMessage().getContentRaw());
                         announcementSession.addField(field);
 
@@ -136,6 +151,7 @@ public class AnnouncementListener extends ListenerAdapter {
 
                 } else if (button.equals(fields)) {
                     announcementSession.setIsField(true);
+                    AnnouncementSession.addFieldCache(event.getUser().getId());
 
                     event.getUser().openPrivateChannel().queue(
                             privateChannel -> privateChannel.sendMessageEmbeds(
@@ -146,6 +162,7 @@ public class AnnouncementListener extends ListenerAdapter {
                 } else if (button.equals(descAndFields)) {
                     announcementSession.setIsDescription(true);
                     announcementSession.setIsField(true);
+                    AnnouncementSession.addFieldCache(event.getUser().getId());
 
                     event.getUser().openPrivateChannel().queue(
                             privateChannel -> privateChannel.sendMessageEmbeds(
@@ -154,11 +171,13 @@ public class AnnouncementListener extends ListenerAdapter {
                     );
 
                 } else if (button.equals(confirm)) {
-                    announcementSession.getChannel().sendMessage(new MessageBuilder(announcementSession.getRole().getAsMention())
-                            .append(announcementSession.getEmbedBuilder().build()).build()).queue();
+                    AnnouncementSession.removeCache(event.getUser().getId());
+
+                    announcementSession.getChannel().sendMessage(new MessageBuilder(announcementSession.getEmbedBuilder().build())
+                            .setContent(announcementSession.getRole().getAsMention()).build()).queue();
 
                     event.getUser().openPrivateChannel().queue(
-                            privateChannel -> privateChannel.sendMessageEmbeds(
+                            privateChannel -> privateChannel.sendMessage(
                                     new EmbedBuilder().setColor(Color.CYAN).setDescription("Announcement has been successfully announced").build()
                             ).queue()
                     );
@@ -173,6 +192,7 @@ public class AnnouncementListener extends ListenerAdapter {
                     );
 
                 } else if (button.equals(addField)) {
+                    announcementSession.setIsField(true);
                     AnnouncementSession.addFieldCache(event.getUser().getId());
 
                     event.getUser().openPrivateChannel().queue(
